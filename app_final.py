@@ -209,12 +209,7 @@ st.sidebar.caption("Prepared for: NYC Taxi & Limousine Commission (TLC)")
 # ==============================================================================
 if app_mode == "🚖 Zone Dispatch Recommender":
     st.title("🚖 Next-Best Zone Driver Recommender")
-    st.markdown(
-        "Generates spatial-temporal pickup recommendations for drivers by combining "
-        "**Spatio-Temporal Graph Neural Network (ST-GNN)** demand forecasts with a "
-        "**Two-Tower Deep Neural Network** matching engine."
-    )
-
+    
     zone_mapping = dict(zip(zone_df['LocationID'], zone_df['Zone']))
 
     st.sidebar.subheader("🕹️ Driver Real-Time State")
@@ -264,6 +259,14 @@ if app_mode == "🚖 Zone Dispatch Recommender":
     display_df = recs_df[['zone_id', 'Borough', 'Zone', 'score', 'predicted_demand']].copy()
     display_df.columns = ["Zone ID", "Borough", "Zone Name", "Matching Score", "Predicted Demand"]
 
+    # Big Idea Takeaway Card
+    top_recommended_zone = display_df.iloc[0]["Zone Name"]
+    top_score = display_df.iloc[0]["Matching Score"]
+    st.info(
+        f"**RECOMMENDED ACTION:** Relocate to **{top_recommended_zone}** (Match Score: **{top_score:.2f}**). "
+        f"Relocating optimizes shift efficiency by targeting the highest predicted demand cluster at **{current_hour}:00 HRS**."
+    )
+
     col1, col2 = st.columns([1, 1])
     with col1:
         st.subheader(f"Top {top_k} High-Yield Zones")
@@ -271,8 +274,8 @@ if app_mode == "🚖 Zone Dispatch Recommender":
 
     with col2:
         st.subheader("Matching Score Distribution")
-        chart_data = display_df.set_index("Zone Name")[["Matching Score"]].sort_values("Matching Score", ascending=True)
-        st.bar_chart(chart_data, horizontal=True)
+        chart_data = display_df.sort_values("Matching Score", ascending=True)
+        st.bar_chart(chart_data, x="Zone Name", y="Matching Score", horizontal=True)
 
     st.markdown("---")
     st.subheader("🗺️ 3D Spatial Map of Recommended Pickup Zones")
@@ -380,10 +383,10 @@ if app_mode == "🚖 Zone Dispatch Recommender":
             )
         )
 
-        st.info(
-            f"🚖 **Driver Origin Status:** Currently dispatched at **{selected_zone_name}** "
+        st.caption(
+            f"Currently dispatched at **{selected_zone_name}** "
             f"(Zone ID: `{selected_zone_id}` | Borough: `{driver_borough}`) at **{current_hour}:00 HRS**. "
-            f"Orange 3D pillars highlight high-demand zones recommended for your shift."
+            f"Tall orange 3D pillars highlight high-demand zones recommended for your shift."
         )
     else:
         st.warning("Spatial boundary shapes are loading or unavailable. Displaying tabular recommendation results above.")
@@ -393,10 +396,6 @@ if app_mode == "🚖 Zone Dispatch Recommender":
 # ==============================================================================
 elif app_mode == "💵 Upfront Fare Estimator":
     st.title("💵 Upfront Fare Estimator")
-    st.markdown(
-        "Predicts total trip fares prior to ride dispatch using the "
-        "**Automatidata Random Forest Regressor**."
-    )
 
     tab1, tab2 = st.tabs(["🚖 Single Trip Estimator", "📂 Batch Fleet Processing (CSV)"])
 
@@ -532,10 +531,6 @@ elif app_mode == "💵 Upfront Fare Estimator":
 # ==============================================================================
 elif app_mode == "📊 EDA & Trip Analytics":
     st.title("📊 Exploratory Data Analysis & Trip Patterns")
-    st.markdown(
-        "Interactive analysis of taxi trip volumes, fare structures, and borough-level "
-        "spatial patterns across New York City."
-    )
 
     df_eda = load_eda_sample_data()
 
@@ -571,21 +566,27 @@ elif app_mode == "📊 EDA & Trip Analytics":
         st.subheader("⏰ Hourly Demand Distribution (Trips by Hour)")
         if not filtered_df.empty:
             hourly_counts = filtered_df.groupby("pickup_hour").size().reset_index(name="Trip Count")
-            st.bar_chart(hourly_counts.set_index("pickup_hour"))
+            peak_hour = hourly_counts.loc[hourly_counts["Trip Count"].idxmax()]["pickup_hour"]
+            st.info(f"**KEY TAKEAWAY:** Demand peaks at **{peak_hour}:00 HRS**. Consider scheduling fleet shifts around this window.")
+            st.bar_chart(hourly_counts, x="pickup_hour", y="Trip Count")
         else:
             st.warning("No data available for selected filters.")
 
     with col_chart2:
         st.subheader("🏙️ Borough Demand Share")
         if not filtered_df.empty:
-            borough_counts = filtered_df.groupby("borough").size().reset_index(name="Trips")
-            st.bar_chart(borough_counts.set_index("borough"), horizontal=True)
+            borough_counts = filtered_df.groupby("borough").size().reset_index(name="Trips").sort_values("Trips", ascending=True)
+            top_borough = borough_counts.iloc[-1]["borough"]
+            top_share = (borough_counts.iloc[-1]["Trips"] / borough_counts["Trips"].sum()) * 100
+            st.info(f"**KEY TAKEAWAY:** **{top_borough}** generates **{top_share:.1f}%** of all ride requests within the selected filter window.")
+            st.bar_chart(borough_counts, x="borough", y="Trips", horizontal=True)
         else:
             st.warning("No data available for selected filters.")
 
     st.markdown("---")
     st.subheader("💵 Fare Amount vs. Distance Correlation")
     if not filtered_df.empty:
+        st.caption("Trip fare increases linearly with distance, with significant fare variance occurring on trips under 10 miles due to traffic duration.")
         st.scatter_chart(
             filtered_df,
             x="trip_distance",
@@ -598,12 +599,10 @@ elif app_mode == "📊 EDA & Trip Analytics":
 # ==============================================================================
 elif app_mode == "📈 Model Performance Audits":
     st.title("📈 Model Performance & Validation Audits")
-    st.markdown("Performance evaluations across random splits and spatio-temporal holdout tests.")
 
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Random Forest Fare Estimator")
-        st.write("**Model:** Boruta-tuned Random Forest Regressor")
         metrics_rf = pd.DataFrame({
             "Metric": ["Mean Absolute Error (MAE)", "Root Mean Squared Error (RMSE)", "R² Score"],
             "Validation Score": ["$1.68", "$2.45", "0.912"]
@@ -612,7 +611,6 @@ elif app_mode == "📈 Model Performance Audits":
 
     with col2:
         st.subheader("ST-GNN Demand Forecaster")
-        st.write("**Model:** Spatio-Temporal Graph Neural Network")
         metrics_gnn = pd.DataFrame({
             "Metric": ["MAE (Rides/Hr)", "RMSE (Rides/Hr)", "Mean Absolute Percentage Error"],
             "Validation Score": ["4.12", "7.38", "11.4%"]
