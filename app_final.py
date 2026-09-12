@@ -27,11 +27,16 @@ TAXI_ZONES_SHP = "taxi_zones/taxi_zones.shp"
 
 TAXI_ICON_URL = "https://img.icons8.com/color/96/000000/taxi.png"
 
-ICON_DATA_MAPPING = {
-    "url": TAXI_ICON_URL,
-    "width": 96,
-    "height": 96,
-    "anchorY": 96
+# PyDeck Icon Mapping structure for reliable layer rendering
+ICON_MAPPING = {
+    "taxi_marker": {
+        "x": 0,
+        "y": 0,
+        "width": 96,
+        "height": 96,
+        "anchorY": 96,
+        "mask": False
+    }
 }
 
 @st.cache_resource
@@ -304,10 +309,10 @@ if app_mode == "🚖 Zone Dispatch Recommender":
             driver_centroid = driver_zone_gdf.to_crs(epsg=2263).geometry.centroid.to_crs(epsg=4326).iloc[0]
             
             driver_icon_df = pd.DataFrame([{
-                "lat": driver_centroid.y,
-                "lon": driver_centroid.x,
+                "lat": float(driver_centroid.y),
+                "lon": float(driver_centroid.x),
                 "zone_name": selected_zone_name,
-                "icon_data": ICON_DATA_MAPPING
+                "icon": "taxi_marker"
             }])
 
         total_score = recs_gdf["score"].sum()
@@ -352,14 +357,17 @@ if app_mode == "🚖 Zone Dispatch Recommender":
             auto_highlight=True,
         )
 
+        # Updated IconLayer with increased size (72px, scale 1.2) for better visual prominence
         driver_icon_layer = pdk.Layer(
             "IconLayer",
             data=driver_icon_df,
-            get_icon="icon_data",
+            get_icon="icon",
+            icon_atlas=TAXI_ICON_URL,
+            icon_mapping=ICON_MAPPING,
             get_position=["lon", "lat"],
-            get_size=48,
-            size_scale=1,
-            pickable=False,
+            get_size=72,
+            size_scale=1.2,
+            pickable=True,
         )
 
         st.pydeck_chart(
@@ -368,7 +376,7 @@ if app_mode == "🚖 Zone Dispatch Recommender":
                 initial_view_state=view_state,
                 map_style="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
                 tooltip={
-                    "html": "<b>Zone:</b> {Zone}<br/>"
+                    "html": "<b>Zone:</b> {Zone}{zone_name}<br/>"
                             "<b>Borough:</b> {Borough}<br/>"
                             "<b>Matching Score:</b> {score}<br/>"
                             "<b>Predicted Demand:</b> {predicted_demand} rides/hr",
@@ -383,10 +391,12 @@ if app_mode == "🚖 Zone Dispatch Recommender":
             )
         )
 
-        st.caption(
-            f"Currently dispatched at **{selected_zone_name}** "
+        # Render caption with enlarged taxi symbol (span styled with 1.35em font-size)
+        st.markdown(
+            f"<span style='font-size: 1.35em;'>🚖</span> Currently dispatched at **{selected_zone_name}** "
             f"(Zone ID: `{selected_zone_id}` | Borough: `{driver_borough}`) at **{current_hour}:00 HRS**. "
-            f"Tall orange 3D pillars highlight high-demand zones recommended for your shift."
+            f"Tall orange 3D pillars highlight high-demand zones recommended for your shift.",
+            unsafe_allow_html=True
         )
     else:
         st.warning("Spatial boundary shapes are loading or unavailable. Displaying tabular recommendation results above.")
